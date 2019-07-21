@@ -10,33 +10,8 @@ app.set('views', __dirname )
 app.engine('html', require('ejs').renderFile);
 
 var count = 0;
-var client = mqtt.connect("mqtt://localhost:1883",{clientId:"mqttjs01",username:"huynam",password:"huynam"});
-var topic1 = "Topic 1";
-var topic2 = "Topic 2";
-var topic3 = "Topic 3";
-var message="test message";
-var topic_list=["home/sensors/temperature","home/sensors/humidity","home/sensors/illumination"];
-
-console.log("connected flag  " + client.connected);
-
-
-function publish(topic,msg,options){
-	console.log("publishing",msg);
-	
-	if (client.connected == true){
-		client.publish(topic,msg,options);
-	}
-}
-
-function twoDigits(d) {
-    if(0 <= d && d < 10) return "0" + d.toString();
-    if(-10 < d && d < 0) return "-0" + (-1*d).toString();
-    return d.toString();
-}
-
-Date.prototype.toMysqlFormat = function() {
-    return this.getUTCFullYear() + "-" + twoDigits(1 + this.getUTCMonth()) + "-" + twoDigits(this.getUTCDate()) + " " + twoDigits(this.getUTCHours()) + ":" + twoDigits(this.getUTCMinutes()) + ":" + twoDigits(this.getUTCSeconds());
-};
+var client = mqtt.connect("mqtt://localhost:1883",{username:"huytq",password:"Quanghuy@123"});
+var topic1 = "DHT11";
 
 var server = app.listen(3000, () => { //Start the server, listening on port 3000.
     console.log("Conect to requests on port 3000...");
@@ -44,9 +19,9 @@ var server = app.listen(3000, () => { //Start the server, listening on port 3000
 
 var connection = mysql.createConnection({
 	host     : 'localhost',
-	user     : 'root',
-	password : 'huynam',
-	database : 'thcsb4'
+	user     : 'huytq',
+	password : 'Quanghuy@123',
+	database : 'wsn'
 });
 
 connection.connect(function(err) {
@@ -59,7 +34,7 @@ connection.connect(function(err) {
 			throw err;
 		console.log("drop tables sensors ok");
 	});
-	sql = "CREATE TABLE sensors( id INT(10) PRIMARY KEY  auto_increment , Sensor_ID varchar(10) not null, Date_and_Time datetime not null, Temperature int(3) not null,Humidity int(3) not null,Illumination int(3) not null)"
+	sql = "CREATE TABLE sensors( id INT(10) PRIMARY KEY  auto_increment, room char(10), temp char(10), hum char(10), time datetime)"
 	connection.query(sql, function(err, result){
 		if (err) 
 			throw err;
@@ -124,92 +99,79 @@ app.post('/auth', function(request, response) {
 	}
 });
 
+var mqtt_server = "mqtt://localhost"
+var mqtt = require("mqtt"); 
+
+var option = {
+	username: "huytq",
+	password: "Quanghuy@123",
+	clean: true
+};
+
+var client = mqtt.connect(mqtt_server, option);
+
+client.on("connect", function (){
+    console.log("Connected to MQTT server!");
+});
+
+client.on("connect", function () {
+   client.subscribe("DHT11");
+});
+
+
+
+function getDateTimeNow() {
+    var date = new Date();
+    timenow = date.getFullYear() + "-" + date.getMonth() + "-" + date.getDate() + " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds();
+    return timenow;
+};
+
+
 var io = require('socket.io')(server); //Bind socket.io to our express server.
 
 //app.use(express.static('public')); //Send index.html page on GET /
 
 io.on('connection', (socket) => {
     console.log("Someone connected."); //show a log as a new client connects.
-    var today = new Date();
-	 connection.query("SELECT * FROM sensors", function (err, result, fields) {
+	 connection.query("SELECT * FROM sensors WHERE room='1' ", function (err, result, fields) {
 	 if (err) throw err;
 	 result.forEach(function(value) {
-	 var m_time = value.Date_and_Time.toString().slice(4,24);
-	console.log(m_time);
-    io.sockets.emit('temp', {date: today.getDate()+"-"+today.getMonth()+1+"-"+today.getFullYear(), time:m_time , temp:value.Temperature,hum:value.Humidity,illu:value.Illumination}); 
+	 var m_time = value.time.toString().slice(4,24);
+	//console.log(m_time);
+    io.sockets.emit('tem', {time:m_time , temp:value.temp,hum:value.hum,room:value.room}); 
 	 });
 	 
-	});
-
-	socket.on('led_status1',(data) =>{
-		console.log("led status change: led1 %d",data.led);
-		publish(topic1,data.led.toString(),options);
-	});
-	socket.on('led_status2',(data) =>{
-		console.log("led status change: led2 %d",data.led);
-		publish(topic2,data.led.toString(),options);
-	});
-	socket.on('led_pwm',(data) =>{
-		console.log("led pwm change: led1 %d ",data.led1);
-		publish(topic3,data.led1.toString(),options);
 	});
 	
 })
 var Temp ;
 var Hum ;
-var Illumination ; 
+var room ; 
 
-var cnt_check = 0;
-
-client.on('message',function(topic, message, packet){
+client.on('message',function(topic, message){
 	console.log("message is "+ message);
 	console.log("topic is "+ topic);
 	//message = JSON.parse(message);
-	if( topic == topic_list[0]){
-		cnt_check ++;
-		//Temp = message["Temperature"];
-		Temp = message;
+	if( topic == topic1){
+		data = message.toString();
+		a = JSON.parse(data);
+		room = a.room;
+		Temp = a.Temperature;
+		Hum = a.Humidity;
 	}
-	else if( topic == topic_list[1]){
-		cnt_check ++;
-		//Hum = message["Humidity"];
-		Hum = message;
-	}
-	else if( topic == topic_list[2]){
-		cnt_check ++;
-		//Illumination = message["Illumination"];
-		Illumination = message;
-	}
-	if( cnt_check == 3 ){
-		cnt_check = 0;
-		console.log(Temp,Hum,Illumination);
+		console.log(room,Temp,Hum);
 
 		console.log("ready to save");
-		var first_name = "DHT-11";
-		var Date_and_Time = new Date().toMysqlFormat(); 
-		let query = "INSERT INTO `sensors` (Sensor_ID,Date_and_Time,Temperature,Humidity,Illumination) VALUES ('" +
-		    first_name + "', '" + Date_and_Time + "', '" + Temp + "', '" + Hum + "', '"+ Illumination + "')";
+		var time = getDateTimeNow();
+		let query = "INSERT INTO `sensors` (room,temp,hum,time) VALUES ( '"+ room + "', '" + Temp + "', '"+ Hum + "','"+ time +"')";
 			connection.query(query, (err, result) => {
 		    if (err) {
 		        throw err;
 		    }
 		});
-
-    	var today = new Date();
-    	io.sockets.emit(first_name, {date: today.getDate()+"-"+today.getMonth()+1+"-"+today.getFullYear(), time:Date_and_Time , temp:Temp,hum:Hum}); 
-		
-
-		 connection.query("SELECT * FROM sensors ORDER BY id DESC LIMIT 1", function (err, result, fields) {
-		 if (err) throw err;
-		 result.forEach(function(value) {
-		 var m_time = value.Date_and_Time.toString().slice(4,24);
-   		 console.log('temp', {date: today.getDate()+"-"+today.getMonth()+1+"-"+today.getFullYear(), time:m_time , temp:value.Temperature,hum:value.Humidity,illu:value.Illumination}); 
-   		 io.sockets.emit('temp', {date: today.getDate()+"-"+today.getMonth()+1+"-"+today.getFullYear(), time:m_time , temp:value.Temperature,hum:value.Humidity,illu:value.Illumination}); 
-	 });
-	 
-	});
-	}
-
+		if(room == 1){
+    		io.sockets.emit('temp', {time:time , temp:Temp,hum:Hum,room:room});
+    	} 
 });
 
 client.on("connect",function(){	
@@ -220,11 +182,3 @@ client.on("connect",function(){
 client.on("error",function(error){
 console.log("Can't connect" + error);
 process.exit(1)});
-
-var options={
-retain:true,
-qos:1};
-
-console.log("subscribing to topics");
-client.subscribe(topic_list,{qos:1}); //topic list
-console.log("end of script");
